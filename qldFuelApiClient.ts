@@ -56,59 +56,39 @@ export interface ISite {
   Prices: {[FuelId: string]: ISitePrice}
 }
 
-
-export const getAllData = (): Promise<{
+interface IAllData {
   brands: Array<IBrand>,
   fuels: Array<IFuel>,
   sites: Array<ISite>,
-}> => {
-  return new Promise((resolve) => {
-
-    const mergedData = {
-      brands: [] as Array<IBrand>,
-      fuels: [] as Array<IFuel>,
-      sites: [] as Array<ISite>,
-    };
-
-    const promises = [] as Array<Promise<Response>>;
-    Object.entries(resources).forEach(([resourceName, resource]) => {
-      const promise = fetch(`${baseUrl}/${resource}`, {
-        headers: {
-          Authorization: `FPDAPI SubscriberToken=${Deno.env.get("API_TOKEN")}`,
-        },
-      })
-        .then((result) => {
-          return result.json();
-        })
-        .then((data) => {
+}
 
 
-          switch (resourceName) {
-            case "brands": {
-              mergedData.brands.push(...data.Brands as IBrand[]);
-              break;
-            }
-            case "fuels": {
-              mergedData.fuels.push(...data.Fuels as IFuel[]);
-              break;
-            }
-            case "sites": {
-              const sites = data.S as IRawSite[]
-              const parsedSites = parseSites(sites, data.site_prices as ISitePrice[])
-              mergedData.sites.push(...parsedSites as ISite[]);
-              break;
-            }
-            // todo: history data site prices
-          }
-        });
-      // @ts-ignore
-      promises.push(promise as Promise<Response>)
-    });
 
-    Promise.all(promises).then(() => resolve(mergedData));
-  });
+export const getAllData = async (): Promise<IAllData> => {
+
+  const brands = await _fetch<{Brands: Array<IBrand>}>(resources.brands);
+  const fuels = await _fetch<{Fuels: Array<IFuel>}>(resources.fuels);
+  const sites = await _fetch<{S: Array<IRawSite>}>(resources.sites);
+  const sitePrices = await _fetch<{SitePrices: Array<ISitePrice>}>(resources.sites_prices);
+
+  return {
+    brands: brands.Brands,
+    fuels: fuels.Fuels,
+    sites: parseSites(sites.S, sitePrices.SitePrices)
+  }
+
 };
 
+const _fetch = async <T>(resource: string): Promise<T> => {
+  return await fetch(`${baseUrl}/${resource}`, {
+    headers: {
+      Authorization: `FPDAPI SubscriberToken=${Deno.env.get("API_TOKEN")}`,
+    },
+  })
+    .then((result) => {
+      return result.json();
+    })
+}
 
 const parseSites = (rawData: IRawSite[], sitePrices: ISitePrice[]): ISite[] => {
 
